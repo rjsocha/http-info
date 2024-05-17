@@ -1,0 +1,4 @@
+all: http-info
+
+http-info: src/http-info.c src/httpserver.h
+	musl-gcc -o http-info -s -O2 -static src/http-info.c
