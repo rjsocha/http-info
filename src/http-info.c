@@ -52,7 +52,14 @@ void handle_request(struct http_request_s* request) {
           struct sockaddr_in *ipv4 = (struct sockaddr_in *)ifaddr->ifa_addr;
           if ((ntohl(ipv4->sin_addr.s_addr) & 0xff000000) == 0x7f000000)
             continue;
-          i += snprintf(buf + i, 8192 - i, "  %s\n",inet_ntoa(ipv4->sin_addr));
+          struct sockaddr_in *netmask_addr = (struct sockaddr_in *)ifaddr->ifa_netmask;
+          int cidr = 0;
+          uint32_t netmask = netmask_addr->sin_addr.s_addr;
+          while (netmask) {
+            cidr += netmask & 1;
+            netmask >>= 1;
+          }
+          i += snprintf(buf + i, 8192 - i, "  %s/%d\n",inet_ntoa(ipv4->sin_addr),cidr);
         }
       }
       freeifaddrs(ifaddrs);
