@@ -7,6 +7,10 @@
 #include <string.h>
 #include <signal.h>
 #include <unistd.h>
+#include <ifaddrs.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
 
 int request_target_is(struct http_request_s* request, char const * target) {
   http_string_t url = http_request_target(request);
@@ -16,6 +20,7 @@ int request_target_is(struct http_request_s* request, char const * target) {
 
 void handle_request(struct http_request_s* request) {
   char buf[8192];
+  char hn[128];
   http_request_connection(request, HTTP_CLOSE);
   struct http_response_s* response = http_response_init();
 
@@ -27,9 +32,35 @@ void handle_request(struct http_request_s* request) {
     int iter = 0, i = 0;
     http_string_t key, val;
     http_string_t url = http_request_target(request);
-    i += snprintf(buf + i, 8192 - i, "URL:\n\n");
+    char *instance;
+
+    memset(hn, 0, sizeof(hn));
+    if (gethostname(hn, sizeof(hn)) == 0) {
+      i += snprintf(buf + i, 8192 - i, "HOSTNAME\n\n  %s\n",hn);
+    }
+    if (instance = getenv("INSTANCE")) {
+      i += snprintf(buf + i, 8192 - i, "\nINSTANCE\n\n  %s\n",instance);
+    }
+
+    struct ifaddrs *ifaddrs, *ifaddr;
+    if (getifaddrs(&ifaddrs) == 0 ) {
+      i += snprintf(buf + i, 8192 - i, "\nIP\n\n");
+      for (ifaddr = ifaddrs; ifaddr != NULL; ifaddr = ifaddr->ifa_next) {
+        if (ifaddr->ifa_addr == NULL)
+          continue;
+        if (ifaddr->ifa_addr->sa_family == AF_INET) {
+          struct sockaddr_in *ipv4 = (struct sockaddr_in *)ifaddr->ifa_addr;
+          if ((ntohl(ipv4->sin_addr.s_addr) & 0xff000000) == 0x7f000000)
+            continue;
+          i += snprintf(buf + i, 8192 - i, "  %s\n",inet_ntoa(ipv4->sin_addr));
+        }
+      }
+      freeifaddrs(ifaddrs);
+    }
+    i += snprintf(buf + i, 8192 - i, "\n");
+    i += snprintf(buf + i, 8192 - i, "URL\n\n");
     i += snprintf(buf + i, 8192 - i, "  %.*s\n\n",url.len,url.buf);
-    i += snprintf(buf + i, 8192 - i, "HEADERS:\n\n");
+    i += snprintf(buf + i, 8192 - i, "HEADERS\n\n");
     while (http_request_iterate_headers(request, &key, &val, &iter)) {
       i += snprintf(buf + i, 8192 - i, "  %.*s: %.*s\n", key.len, key.buf, val.len, val.buf);
     }
